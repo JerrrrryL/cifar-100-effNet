@@ -7,13 +7,34 @@ Original file is located at
     https://colab.research.google.com/drive/1XTob1MZYTbI0JeVHw3UDuw6Ue6MWU9nK
 """
 
-! git clone https://github.com/davda54/sam.git
-! pip install opacus
-! git clone https://github.com/hyhmia/BlindMI.git
+# ! git clone https://github.com/davda54/sam.git
+# ! pip install opacus
 
+import torch
+import os
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader, Subset
 import torch.nn as nn
+import torch.nn.functional as F
+from collections import OrderedDict
+import numpy as np
+import torchvision
+import torchvision.transforms as transforms
+from PIL.Image import BICUBIC
+import torchvision.models as models
+import sys
+import torch.nn as nn
+sys.path.append('sam/example/')
+from utility.cutout import Cutout
+from model.smooth_cross_entropy import smooth_crossentropy
+from utility.log import Log
+from utility.initialize import initialize
+from utility.step_lr import StepLR
+# from opacus import PrivacyEngine
+# import opacus.utils.module_modification as module_modification
+# from opacus.dp_model_inspector import DPModelInspector
+from torchvision.models import wide_resnet101_2
 import math
-import torch.utils.model_zoo as model_zoo
 
 
 __all__ = ['ResNet', 'resnet50', 'resnet101']
@@ -147,22 +168,6 @@ def resnet101(**kwargs):
     model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
     return model
 
-import torch
-
-import sys
-import torch.nn as nn
-sys.path.append('sam/example/')
-from utility.cutout import Cutout
-from model.wide_res_net import WideResNet
-from model.smooth_cross_entropy import smooth_crossentropy
-from utility.log import Log
-from utility.initialize import initialize
-from utility.step_lr import StepLR
-from opacus import PrivacyEngine
-import opacus.utils.module_modification as module_modification
-from opacus.dp_model_inspector import DPModelInspector
-from torchvision.models import wide_resnet101_2
-
 class SAM(torch.optim.Optimizer):
     def __init__(self, params, base_optimizer, rho=0.05, **kwargs):
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
@@ -218,20 +223,6 @@ class SAM(torch.optim.Optimizer):
                     p=2
                )
         return norm
-
-import torch
-import os
-import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader, Subset
-import torch.nn as nn
-import torch.nn.functional as F
-from collections import OrderedDict
-import numpy as np
-import torchvision
-import torchvision.transforms as transforms
-from PIL.Image import BICUBIC
-from opacus.utils.uniform_sampler import UniformWithReplacementSampler
-import torchvision.models as models
 
 dropout = 0.2
 learning_rate = 8e-4
@@ -307,23 +298,23 @@ def train_target_model(train_set, test_set, run, class_num=100, learning_rate=0.
   model = model.to(device)
   log = Log(log_each=10)
 
-  privacy_engine = PrivacyEngine(
-      model,
-      sample_rate=sample_rate,
-      alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)),
-      noise_multiplier=noise_multiplier,
-      max_grad_norm=max_grad_norm,
-  )
+#   privacy_engine = PrivacyEngine(
+#       model,
+#       sample_rate=sample_rate,
+#       alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)),
+#       noise_multiplier=noise_multiplier,
+#       max_grad_norm=max_grad_norm,
+#   )
   # DP-SGD
   if SGD:
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-    if dp:
-      privacy_engine.attach(optimizer)
+#     if dp:
+#       privacy_engine.attach(optimizer)
   # SAM
   else:
     base_optimizer = torch.optim.SGD
-    if dp:
-      privacy_engine.attach(base_optimizer)
+#     if dp:
+#       privacy_engine.attach(base_optimizer)
     optimizer = SAM(model.parameters(), base_optimizer, rho=rho, lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
   scheduler = StepLR(optimizer, learning_rate, epochs)
   for epoch in range(epochs):
@@ -655,17 +646,17 @@ for i in range(1):
   run_experiment(i+1, dropout=0.5, learning_rate=8e-3)
   run_experiment(i+1, l2_reg=0.0025, learning_rate=8e-3)
   run_experiment(i+1, SGD=False, learning_rate=8e-3)
-  run_experiment(i+1, dp=True, learning_rate=8e-3)
+#   run_experiment(i+1, dp=True, learning_rate=8e-3)
 
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-target_model = torch.load('model0.pt').to(device)
-shadow_model = torch.load('model1.pt').to(device)
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# target_model = torch.load('model0.pt').to(device)
+# shadow_model = torch.load('model1.pt').to(device)
 
-shadow_train = torch.load('train1.pt')
-shadow_test = torch.load('test1.pt')
-validate_train = torch.load('train0.pt')
-validate_test = torch.load('test0.pt')
-salem_membership_inference(target_model, shadow_train, shadow_test, validate_train, validate_test)
-yeom_attack(device, validate_train, validate_test, target_model)
+# shadow_train = torch.load('train1.pt')
+# shadow_test = torch.load('test1.pt')
+# validate_train = torch.load('train0.pt')
+# validate_test = torch.load('test0.pt')
+# salem_membership_inference(target_model, shadow_train, shadow_test, validate_train, validate_test)
+# yeom_attack(device, validate_train, validate_test, target_model)
